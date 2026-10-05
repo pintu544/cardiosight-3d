@@ -19,6 +19,11 @@ drives the risk.
 - **3D:** react-three-fiber heart with 3 painted vessel territories
   (LAD→anterior, LCX→lateral, RCA→inferior), color-coded by predicted risk.
   Territory map is illustrative, based on standard coronary anatomy.
+- **What-if simulator:** adjust modifiable risk factors (BMI, LDL, HDL, TG,
+  blood sugar, weight, smoking, hypertension) with sliders and see predicted
+  risk update live with per-vessel deltas.
+- **Plain-language summaries:** auto-generated narrative explaining the
+  prediction, highest-risk vessel, and key factors in non-technical terms.
 - **Why ablation, not SHAP:** per-patient Shapley values need a heavy native
   dependency chain (shap → numba/llvmlite) that made production builds fragile.
   Feature ablation against the median patient profile answers the clinically
