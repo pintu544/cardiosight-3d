@@ -37,7 +37,7 @@ export default function Evaluation() {
           <li>Dataset: UCI "Extension of Z-Alizadeh Sani" — 303 patients, 54 clinical features, ground-truth angiography labels.</li>
           <li>Four independent binary classifiers (LAD / LCX / RCA stenosis, overall CAD). Per the dataset authors' note, the other three labels are excluded when training each target to avoid leakage.</li>
           <li>Model selection: Logistic Regression vs Random Forest vs Gradient Boosting by 5-fold CV AUC; winner calibrated with sigmoid (Platt) scaling.</li>
-          <li>Explanations: SHAP values from the underlying estimator (TreeExplainer / LinearExplainer).</li>
+          <li>Explanations: feature ablation vs the median patient profile — each factor is set to the dataset median while all others are held fixed; the reported contribution is the change in predicted probability. Chosen over SHAP for serving reliability: same predictions, directly interpretable units, no heavy native dependencies.</li>
           <li>Reproducible: <code className="text-slate-300">api/train.py --seed 42</code>; artifacts versioned in <code className="text-slate-300">models/</code>.</li>
         </ul>
         <h2 className="font-semibold text-base pt-2">Limitations</h2>

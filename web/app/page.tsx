@@ -33,8 +33,8 @@ function Gauge({ label, value }: { label: string; value: number }) {
   );
 }
 
-function AttrBars({ title, items }: { title: string; items: { label: string; shap: number; direction: string }[] }) {
-  const max = Math.max(...items.map(i => Math.abs(i.shap)), 0.001);
+function AttrBars({ title, items }: { title: string; items: { label: string; contribution: number; direction: string }[] }) {
+  const max = Math.max(...items.map(i => Math.abs(i.contribution)), 0.001);
   return (
     <div className="card">
       <h3 className="font-semibold mb-3">{title} — top risk factors</h3>
@@ -44,7 +44,7 @@ function AttrBars({ title, items }: { title: string; items: { label: string; sha
             <span className="w-44 truncate text-slate-300" title={a.label}>{a.label}</span>
             <div className="flex-1 h-4 bg-slate-800 rounded relative">
               <div className={`absolute top-0 h-4 rounded ${a.direction === 'up' ? 'bg-rose-500 left-1/2' : 'bg-emerald-500 right-1/2'}`}
-                style={{ width: `${(Math.abs(a.shap) / max) * 50}%` }} />
+                style={{ width: `${(Math.abs(a.contribution) / max) * 50}%` }} />
               <div className="absolute left-1/2 top-0 h-4 w-px bg-slate-600" />
             </div>
             <span className={`w-16 text-right text-xs ${a.direction === 'up' ? 'text-rose-400' : 'text-emerald-400'}`}>
@@ -189,6 +189,7 @@ export default function Home() {
             <AttrBars title="RCA" items={result.attributions.rca} />
             <AttrBars title="Overall CAD" items={result.attributions.cath} />
           </div>
+          <p className="text-xs text-slate-500 mt-3 max-w-3xl">{result.attribution_method}</p>
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@ Vessel-level coronary artery disease risk prediction on an interactive 3D heart.
 Built for **Multimodal AI Hackathon 2026 — Track A** (Kamand Prompt, IIT Mandi).
 
 Enter a patient profile → get stenosis probabilities for **LAD / LCX / RCA** +
-overall CAD → see them mapped on a 3D heart with **SHAP explanations** of what
+overall CAD → see them mapped on a 3D heart with **plain-language explanations** of what
 drives the risk.
 
 > Educational visualization only — not a diagnostic device, not medical advice.
@@ -15,10 +15,16 @@ drives the risk.
   features, ground-truth angiography labels for LAD/LCX/RCA stenosis + CAD.
 - **Models:** 4 calibrated binary classifiers (Random Forest for LAD/LCX,
   Logistic Regression for RCA/CAD — winners by 5-fold CV AUC).
-- **Explainability:** SHAP values per prediction, plain-language factor lists.
+- **Explainability:** feature-ablation attributions per prediction (each factor set to the median-patient value; reported contribution = change in predicted probability), plain-language factor lists.
 - **3D:** react-three-fiber heart with 3 painted vessel territories
   (LAD→anterior, LCX→lateral, RCA→inferior), color-coded by predicted risk.
   Territory map is illustrative, based on standard coronary anatomy.
+- **Why ablation, not SHAP:** per-patient Shapley values need a heavy native
+  dependency chain (shap → numba/llvmlite) that made production builds fragile.
+  Feature ablation against the median patient profile answers the clinically
+  intuitive question directly — "how much does this factor change *this*
+  patient's predicted risk vs a typical patient?" — with no serving-time
+  native dependencies and identical predicted probabilities.
 
 ## Validated metrics (stratified 5-fold CV)
 
@@ -51,7 +57,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
 
 ## API
 
-- `POST /predict` `{features: {...}}` → probabilities + SHAP attributions
+- `POST /predict` `{features: {...}}` → probabilities + ablation attributions
 - `GET /features` → input schema for the form
 - `GET /presets` → sample patients (low/moderate/high)
 - `GET /metrics` → cross-validated scores

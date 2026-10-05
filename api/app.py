@@ -1,11 +1,19 @@
-"""CardioSight 3D inference API — vessel-level CAD risk + SHAP explanations."""
+"""CardioSight 3D inference API — vessel-level CAD risk + local explanations.
+
+Attribution method: feature ablation against the median patient profile.
+For each clinical factor we ask: what would this patient's predicted risk be
+if this one factor were typical (dataset median) instead? The difference
+(p_full - p_ablated) is reported as that factor's contribution, in units of
+predicted probability. This is a model-agnostic local explanation that
+directly answers the clinically intuitive question, without the heavy
+native dependencies a Shapley-value library would require at serving time.
+"""
 import json
 from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
-import shap
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -75,7 +83,14 @@ app = FastAPI(title='CardioSight 3D API', version='1.0.0')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'],
                    allow_headers=['*'])
 
-MODELS, EXPLAINERS, METRICS, PRESETS, FEATURES = {}, {}, {}, {}, []
+MODELS, METRICS, PRESETS, FEATURES, MEDIANS = {}, {}, {}, [], {}
+
+ATTRIBUTION_METHOD = (
+    'Feature ablation vs the median patient profile: each factor is set to the '
+    'dataset median while all others are held fixed; the reported contribution '
+    'is the change in predicted probability. Positive contributions raise the '
+    'predicted risk, negative ones lower it.'
+)
 
 
 @app.on_event('startup')
@@ -86,16 +101,11 @@ def load():
     FEATURES.extend(METRICS['features'])
     with open(BASE / 'models' / 'presets.json') as f:
         PRESETS.update(json.load(f))
-    bg = pd.read_csv(BASE / 'data' / 'clean.csv')[FEATURES]
+    with open(BASE / 'models' / 'background.json') as f:
+        MEDIANS.update(json.load(f)['median_profile'])
     for t in TARGETS:
-        cal = joblib.load(BASE / 'models' / f'{t.lower()}.pkl')
-        MODELS[t] = cal
-        base = cal.calibrated_classifiers_[0].estimator
-        if METRICS['winners'][t] == 'rf':
-            EXPLAINERS[t] = shap.TreeExplainer(base)
-        else:
-            EXPLAINERS[t] = shap.LinearExplainer(base, bg)
-    print(f'loaded {len(MODELS)} models + explainers')
+        MODELS[t] = joblib.load(BASE / 'models' / f'{t.lower()}.pkl')
+    print(f'loaded {len(MODELS)} models + median background profile')
 
 
 class PredictIn(BaseModel):
@@ -114,6 +124,11 @@ def health():
 @app.get('/metrics')
 def metrics():
     return METRICS
+
+
+@app.get('/attribution-method')
+def attribution_method():
+    return {'method': ATTRIBUTION_METHOD}
 
 
 @app.get('/features')
@@ -138,24 +153,29 @@ def predict(inp: PredictIn):
         x = np.array([[float(inp.features[f]) for f in FEATURES]])
     except (TypeError, ValueError):
         raise HTTPException(400, 'all features must be numeric')
+    # Batched ablation: row 0 = patient as-is, rows 1..54 = one feature
+    # set to the median (typical) value. One predict_proba per target.
+    med = np.array([MEDIANS[f] for f in FEATURES])
+    X = np.tile(x, (1 + len(FEATURES), 1))
+    for i in range(len(FEATURES)):
+        X[1 + i, i] = med[i]
+    Xdf = pd.DataFrame(X, columns=FEATURES)
     out, attrs = {}, {}
     for t in TARGETS:
-        p = float(MODELS[t].predict_proba(x)[0][1])
-        out[t.lower()] = round(p, 4)
-        sv = EXPLAINERS[t].shap_values(x)
-        sv = np.asarray(sv)
-        if sv.ndim == 3:      # (n, features, classes) -> take class 1
-            sv = sv[:, :, 1]
-        elif isinstance(sv, list):
-            sv = sv[1] if len(sv) == 2 else sv[0]
-        sv = np.asarray(sv).ravel()
-        idx = np.argsort(-np.abs(sv))[:8]
+        p = MODELS[t].predict_proba(Xdf)[:, 1]
+        p_full = float(p[0])
+        out[t.lower()] = round(p_full, 4)
+        contrib = p_full - p[1:]
+        idx = np.argsort(-np.abs(contrib))[:8]
         attrs[t.lower()] = [
             {'feature': FEATURES[i],
              'label': FEATURE_META.get(FEATURES[i], (FEATURES[i], '', 0, 1))[0],
-             'value': float(x[0][i]), 'shap': round(float(sv[i]), 4),
-             'direction': 'up' if sv[i] > 0 else 'down'}
+             'value': float(x[0][i]),
+             'typical_value': float(med[i]),
+             'contribution': round(float(contrib[i]), 4),
+             'direction': 'up' if contrib[i] > 0 else 'down'}
             for i in idx
         ]
     out['stratum'] = stratum(out['cath'])
-    return {'probabilities': out, 'attributions': attrs}
+    return {'probabilities': out, 'attributions': attrs,
+            'attribution_method': ATTRIBUTION_METHOD}
