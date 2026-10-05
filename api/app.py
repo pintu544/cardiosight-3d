@@ -9,6 +9,7 @@ directly answers the clinically intuitive question, without the heavy
 native dependencies a Shapley-value library would require at serving time.
 """
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import joblib
@@ -79,10 +80,6 @@ FEATURE_META = {
     'VHD': ('Valvular heart disease', '0=none,1=mild,2=moderate,3=severe', 0, 3),
 }
 
-app = FastAPI(title='CardioSight 3D API', version='1.0.0')
-app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'],
-                   allow_headers=['*'])
-
 MODELS, METRICS, PRESETS, FEATURES, MEDIANS = {}, {}, {}, [], {}
 
 ATTRIBUTION_METHOD = (
@@ -93,9 +90,8 @@ ATTRIBUTION_METHOD = (
 )
 
 
-@app.on_event('startup')
-def load():
-    global FEATURES
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     with open(BASE / 'models' / 'metrics.json') as f:
         METRICS.update(json.load(f))
     FEATURES.extend(METRICS['features'])
@@ -106,6 +102,12 @@ def load():
     for t in TARGETS:
         MODELS[t] = joblib.load(BASE / 'models' / f'{t.lower()}.pkl')
     print(f'loaded {len(MODELS)} models + median background profile')
+    yield
+
+
+app = FastAPI(title='CardioSight 3D API', version='1.0.0', lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'],
+                   allow_headers=['*'])
 
 
 class PredictIn(BaseModel):
@@ -159,10 +161,10 @@ def predict(inp: PredictIn):
     X = np.tile(x, (1 + len(FEATURES), 1))
     for i in range(len(FEATURES)):
         X[1 + i, i] = med[i]
-    Xdf = pd.DataFrame(X, columns=FEATURES)
     out, attrs = {}, {}
     for t in TARGETS:
-        p = MODELS[t].predict_proba(Xdf)[:, 1]
+        # models were fitted on plain arrays (no feature names); pass numpy
+        p = MODELS[t].predict_proba(X)[:, 1]
         p_full = float(p[0])
         out[t.lower()] = round(p_full, 4)
         contrib = p_full - p[1:]
