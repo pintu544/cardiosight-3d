@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+data/*.xlsx
+data/*.zip
+models/*.pkl
+node_modules/
+.next/
+.env
