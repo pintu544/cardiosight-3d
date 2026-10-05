@@ -1,0 +1,122 @@
+{
+  "seed": 42,
+  "cv": "stratified-5fold",
+  "comparison": {
+    "LAD": {
+      "logreg": 0.814,
+      "rf": 0.857,
+      "gbm": 0.826
+    },
+    "LCX": {
+      "logreg": 0.661,
+      "rf": 0.719,
+      "gbm": 0.71
+    },
+    "RCA": {
+      "logreg": 0.729,
+      "rf": 0.701,
+      "gbm": 0.71
+    },
+    "Cath": {
+      "logreg": 0.928,
+      "rf": 0.916,
+      "gbm": 0.892
+    }
+  },
+  "winners": {
+    "LAD": "rf",
+    "LCX": "rf",
+    "RCA": "logreg",
+    "Cath": "logreg"
+  },
+  "features": [
+    "Age",
+    "Weight",
+    "Length",
+    "Sex",
+    "BMI",
+    "DM",
+    "HTN",
+    "Current Smoker",
+    "EX-Smoker",
+    "FH",
+    "Obesity",
+    "CRF",
+    "CVA",
+    "Airway disease",
+    "Thyroid Disease",
+    "CHF",
+    "DLP",
+    "BP",
+    "PR",
+    "Edema",
+    "Weak Peripheral Pulse",
+    "Lung rales",
+    "Systolic Murmur",
+    "Diastolic Murmur",
+    "Typical Chest Pain",
+    "Dyspnea",
+    "Function Class",
+    "Atypical",
+    "Nonanginal",
+    "LowTH Ang",
+    "Q Wave",
+    "St Elevation",
+    "St Depression",
+    "Tinversion",
+    "LVH",
+    "Poor R Progression",
+    "BBB",
+    "FBS",
+    "CR",
+    "TG",
+    "LDL",
+    "HDL",
+    "BUN",
+    "ESR",
+    "HB",
+    "K",
+    "Na",
+    "WBC",
+    "Lymph",
+    "Neut",
+    "PLT",
+    "EF-TTE",
+    "Region RWMA",
+    "VHD"
+  ],
+  "targets": {
+    "LAD": {
+      "model": "rf",
+      "calibrated": true,
+      "cv_auc": 0.86,
+      "cv_auc_std": 0.058,
+      "cv_acc": 0.799,
+      "pos_rate": 0.584
+    },
+    "LCX": {
+      "model": "rf",
+      "calibrated": true,
+      "cv_auc": 0.728,
+      "cv_auc_std": 0.067,
+      "cv_acc": 0.693,
+      "pos_rate": 0.393
+    },
+    "RCA": {
+      "model": "logreg",
+      "calibrated": true,
+      "cv_auc": 0.729,
+      "cv_auc_std": 0.029,
+      "cv_acc": 0.663,
+      "pos_rate": 0.376
+    },
+    "Cath": {
+      "model": "logreg",
+      "calibrated": true,
+      "cv_auc": 0.927,
+      "cv_auc_std": 0.033,
+      "cv_acc": 0.844,
+      "pos_rate": 0.713
+    }
+  }
+}
