@@ -19,6 +19,9 @@ const CATEGORICAL: Record<string, [string, number][]> = {
   'VHD': [['None', 0], ['Mild', 1], ['Moderate', 2], ['Severe', 3]],
 };
 
+// Modifiable risk factors for the what-if simulator
+const WHATIF_FIELDS = ['BMI', 'LDL', 'HDL', 'TG', 'FBS', 'Weight', 'Current Smoker', 'HTN'];
+
 function Gauge({ label, value }: { label: string; value: number }) {
   const pct = Math.round(value * 100);
   const color = value < 0.33 ? 'bg-emerald-500' : value < 0.66 ? 'bg-amber-500' : 'bg-rose-500';
@@ -31,6 +34,25 @@ function Gauge({ label, value }: { label: string; value: number }) {
       </div>
     </div>
   );
+}
+
+function plainSummary(prob: { lad: number; lcx: number; rca: number; cath: number; stratum: string },
+    attrs: Record<string, { label: string; direction: string; contribution: number }[]>): string {
+  const pct = (v: number) => Math.round(v * 100);
+  const vessels = [
+    { name: 'left anterior descending artery (LAD)', v: prob.lad },
+    { name: 'left circumflex artery (LCX)', v: prob.lcx },
+    { name: 'right coronary artery (RCA)', v: prob.rca },
+  ].sort((a, b) => b.v - a.v);
+  const top = vessels[0];
+  const raisers = attrs.cath.filter(a => a.direction === 'up').slice(0, 3).map(a => a.label.toLowerCase());
+  const lowerers = attrs.cath.filter(a => a.direction === 'down').slice(0, 2).map(a => a.label.toLowerCase());
+  let s = `The model predicts a ${pct(prob.cath)}% probability of coronary artery disease (${prob.stratum} risk). `;
+  s += `Among the three vessel territories, the highest predicted stenosis risk is in the ${top.name} at ${pct(top.v)}%. `;
+  if (raisers.length) s += `The factors most raising this patient's risk are ${raisers.join(', ')}. `;
+  if (lowerers.length) s += `Factors associated with lower risk include ${lowerers.join(', ')}. `;
+  s += `These are statistical associations from a 303-patient dataset, not a diagnosis.`;
+  return s;
 }
 
 function AttrBars({ title, items }: { title: string; items: { label: string; contribution: number; direction: string }[] }) {
@@ -65,6 +87,10 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [vessel, setVessel] = useState<VesselKey | null>(null);
+  // what-if simulator state
+  const [whatif, setWhatif] = useState<Record<string, number> | null>(null);
+  const [whatifResult, setWhatifResult] = useState<PredictResult | null>(null);
+  const [whatifLoading, setWhatifLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([api.features(), api.presets()]).then(([fm, pr]) => {
@@ -94,9 +120,38 @@ export default function Home() {
       const d = pr[name]; setDefaults(d);
       const init: Record<string, number> = {};
       KEY_FIELDS.forEach(f => { if (d[f] !== undefined) init[f] = Math.round(d[f] * 100) / 100; });
-      setVals(init); setResult(null);
+      setVals(init); setResult(null); setWhatif(null); setWhatifResult(null);
     });
   }
+
+  // Initialize what-if sliders from the predicted patient's values
+  useEffect(() => {
+    if (result && !whatif) {
+      const init: Record<string, number> = {};
+      WHATIF_FIELDS.forEach(f => {
+        const v = vals[f] ?? defaults[f];
+        if (v !== undefined) init[f] = Math.round(v * 100) / 100;
+      });
+      setWhatif(init);
+    }
+  }, [result]);
+
+  // Debounced what-if re-prediction
+  useEffect(() => {
+    if (!whatif || !result) return;
+    setWhatifLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const features = { ...defaults, ...vals, ...whatif };
+        setWhatifResult(await api.predict(features));
+      } catch { /* keep last good result */ }
+      setWhatifLoading(false);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [whatif]);
+
+  const setWhatifVal = (f: string, v: number) =>
+    setWhatif(s => s ? { ...s, [f]: v } : s);
 
   const metaByName = Object.fromEntries(meta.map(m => [m.name, m]));
   const p = result?.probabilities;
@@ -152,12 +207,8 @@ export default function Home() {
           <div className={`card border-l-4 ${p.stratum === 'high' ? 'border-l-rose-500' : p.stratum === 'moderate' ? 'border-l-amber-500' : 'border-l-emerald-500'}`}>
             <span className="text-sm text-slate-400">Overall risk stratum:</span>
             <span className="ml-2 text-xl font-bold capitalize">{p.stratum}</span>
-            <p className="text-sm text-slate-400 mt-2">
-              {p.stratum === 'high'
-                ? `Elevated predicted probability of coronary artery disease (${Math.round(p.cath * 100)}%). The vessel breakdown and factor analysis below show where the risk concentrates.`
-                : p.stratum === 'moderate'
-                ? `Intermediate predicted probability (${Math.round(p.cath * 100)}%). Review the vessel breakdown — one territory may still carry high risk.`
-                : `Low predicted probability (${Math.round(p.cath * 100)}%). The factors pushing risk down are shown below.`}
+            <p className="text-sm text-slate-300 mt-3 leading-relaxed">
+              {plainSummary(p, result.attributions)}
             </p>
           </div>
 
@@ -190,6 +241,80 @@ export default function Home() {
             <AttrBars title="Overall CAD" items={result.attributions.cath} />
           </div>
           <p className="text-xs text-slate-500 mt-3 max-w-3xl">{result.attribution_method}</p>
+
+          {whatif && (
+            <div className="card border border-slate-700">
+              <h3 className="font-semibold mb-1">What-if simulator</h3>
+              <p className="text-xs text-slate-500 mb-4 max-w-2xl">
+                Adjust modifiable risk factors to see how the predicted risk changes.
+                This is an educational illustration of the model's behavior, not medical advice.
+              </p>
+              <div className="grid md:grid-cols-2 gap-x-8 gap-y-4">
+                {WHATIF_FIELDS.map(f => {
+                  const m = metaByName[f]; if (!m || whatif[f] === undefined) return null;
+                  const isBinary = m.max <= 1 && m.min === 0;
+                  const base = vals[f] ?? defaults[f] ?? 0;
+                  const cur = whatif[f];
+                  const changed = Math.abs(cur - base) > 1e-9;
+                  return (
+                    <div key={f}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className={changed ? 'text-amber-300 font-medium' : 'text-slate-300'}>
+                          {m.label} {changed && '●'}
+                        </span>
+                        <span className="text-slate-400 text-xs">
+                          {isBinary ? (cur ? 'Yes' : 'No') : cur} <span className="text-slate-600">({m.unit})</span>
+                        </span>
+                      </div>
+                      {isBinary ? (
+                        <select className="input" value={cur} onChange={e => setWhatifVal(f, Number(e.target.value))}>
+                          <option value={0}>No</option><option value={1}>Yes</option>
+                        </select>
+                      ) : (
+                        <input type="range" className="w-full accent-rose-500"
+                          min={m.min} max={m.max} step={(m.max - m.min) / 100}
+                          value={cur} onChange={e => setWhatifVal(f, Number(e.target.value))} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {whatifResult && (
+                <div className="mt-6 pt-4 border-t border-slate-800">
+                  <div className="text-sm text-slate-400 mb-3">
+                    {whatifLoading ? 'Recalculating…' : 'Predicted risk with your adjustments:'}
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {(['lad', 'lcx', 'rca', 'cath'] as const).map(k => {
+                      const base = p[k]; const cur = whatifResult.probabilities[k];
+                      const d = Math.round((cur - base) * 100);
+                      const label = { lad: 'LAD', lcx: 'LCX', rca: 'RCA', cath: 'Overall CAD' }[k];
+                      return (
+                        <div key={k} className="bg-slate-950 rounded-lg p-3 border border-slate-800">
+                          <div className="text-xs text-slate-400">{label}</div>
+                          <div className="text-2xl font-bold mt-1">{Math.round(cur * 100)}<span className="text-sm text-slate-500">%</span></div>
+                          <div className={`text-xs mt-1 font-medium ${d > 0 ? 'text-rose-400' : d < 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                            {d > 0 ? `▲ +${d}pp` : d < 0 ? `▼ ${d}pp` : '— no change'} vs baseline
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button type="button" onClick={() => {
+                      const init: Record<string, number> = {};
+                      WHATIF_FIELDS.forEach(f => {
+                        const v = vals[f] ?? defaults[f];
+                        if (v !== undefined) init[f] = Math.round(v * 100) / 100;
+                      });
+                      setWhatif(init); setWhatifResult(null);
+                    }}
+                    className="text-xs mt-4 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700">
+                    Reset adjustments
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
