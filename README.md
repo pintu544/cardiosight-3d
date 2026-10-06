@@ -16,9 +16,11 @@ drives the risk.
 - **Models:** 4 calibrated binary classifiers (Random Forest for LAD/LCX,
   Logistic Regression for RCA/CAD — winners by 5-fold CV AUC).
 - **Explainability:** feature-ablation attributions per prediction (each factor set to the median-patient value; reported contribution = change in predicted probability), plain-language factor lists.
-- **3D:** react-three-fiber heart with 3 painted vessel territories
-  (LAD→anterior, LCX→lateral, RCA→inferior), color-coded by predicted risk.
-  Territory map is illustrative, based on standard coronary anatomy.
+- **3D:** react-three-fiber anatomical heart (Human Atlas Project 3D Reference
+  Object Library, CC BY 4.0) with coronary territories mapped to mesh groups
+  (LAD→left ventricle + septum, LCX→left atrium, RCA→right heart),
+  color-coded by predicted risk. Territory map is illustrative, based on
+  standard coronary anatomy.
 - **What-if simulator:** adjust modifiable risk factors (BMI, LDL, HDL, TG,
   blood sugar, weight, smoking, hypertension) with sliders and see predicted
   risk update live with per-vessel deltas.
