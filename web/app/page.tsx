@@ -247,7 +247,7 @@ export default function Home() {
               <h3 className="font-semibold mb-1">What-if simulator</h3>
               <p className="text-xs text-slate-500 mb-4 max-w-2xl">
                 Adjust modifiable risk factors to see how the predicted risk changes.
-                This is an educational illustration of the model's behavior, not medical advice.
+                This is an educational illustration of the model&apos;s behavior, not medical advice.
               </p>
               <div className="grid md:grid-cols-2 gap-x-8 gap-y-4">
                 {WHATIF_FIELDS.map(f => {
